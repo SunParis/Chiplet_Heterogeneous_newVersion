@@ -6,6 +6,9 @@
 #include "yaml-cpp/yaml.h"
 namespace fs = boost::filesystem;
 
+# ifndef PROCESS_CONFIG
+# define PROCESS_CONFIG
+
 /**
  * @defgroup benchmark_yaml
  * @brief YAML configuration file interface.
@@ -61,6 +64,8 @@ class ProcessConfig {
      */
     std::string m_pre_copy;
 };
+
+# endif
 
 /**
  * @brief Benchmark configuration structure.

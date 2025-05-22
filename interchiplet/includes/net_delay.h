@@ -47,6 +47,8 @@ class NetworkDelayItem {
      */
     std::vector<InterChiplet::InnerTimeType> m_delay_list;
 
+    InterChiplet::InnerTimeType m_dst_cycle = -1;
+
    public:
     /**
      * @brief Construct Empty NetworkDelayItem.
@@ -65,6 +67,11 @@ class NetworkDelayItem {
                      const InterChiplet::AddrType& __dst, long __desc,
                      const std::vector<InterChiplet::InnerTimeType>& __delay_list)
         : m_cycle(__cycle), m_dst(__dst), m_src(__src), m_delay_list(__delay_list) {}
+    
+    NetworkDelayItem(const NetworkDelayItem& item)
+    :   m_cycle(item.m_cycle), m_dst(item.m_dst), m_src(item.m_src),
+        m_desc(item.m_desc), m_delay_list(item.m_delay_list)
+    {}
 
     /**
      * @brief Overloading operator <<.
@@ -330,6 +337,25 @@ class NetworkDelayStruct {
         }
     }
 
+    void inputDelayInfo(const std::vector<NetworkDelayItem>& res_list) {
+        for (auto& item: res_list) {
+            m_src_delay_map.insert(item.m_src, item.m_cycle, item);
+            // Ordering of barrier, launch, lock and unlock.
+            if (item.m_desc & 0xF0000) {
+                InterChiplet::InnerTimeType end_cycle = item.m_cycle + item.m_delay_list[1];
+                if (item.m_desc & InterChiplet::SPD_BARRIER) {
+                    m_barrier_delay_map.insert(item.m_dst, end_cycle, item);
+                } else if (item.m_desc & InterChiplet::SPD_LAUNCH) {
+                    m_launch_delay_map.insert(item.m_dst, end_cycle, item);
+                } else if (item.m_desc & InterChiplet::SPD_LOCK) {
+                    m_lock_delay_map.insert(item.m_dst, end_cycle, item);
+                } else if (item.m_desc & InterChiplet::SPD_UNLOCK) {
+                    m_unlock_delay_map.insert(item.m_dst, end_cycle, item);
+                }
+            }
+        }
+    }
+
     /**
      * @brief Check the order of write/read commands.
      * @param __cmd Command to check.
@@ -451,8 +477,8 @@ class NetworkDelayStruct {
             InterChiplet::InnerTimeType pac_delay_src = delay_info.m_delay_list[0];
             InterChiplet::InnerTimeType pac_delay_dst = delay_info.m_delay_list[1];
             InterChiplet::InnerTimeType write_end_time = __write_cmd.m_cycle + pac_delay_src;
-            InterChiplet::InnerTimeType read_end_time = __write_cmd.m_cycle + pac_delay_dst;
-            if (__read_cmd.m_cycle > read_end_time) {
+            InterChiplet::InnerTimeType read_end_time = __read_cmd.m_cycle + pac_delay_dst;
+            if (__read_cmd.m_cycle > write_end_time) {
                 read_end_time = __read_cmd.m_cycle;
             }
             return CmdDelayPair(write_end_time, read_end_time);

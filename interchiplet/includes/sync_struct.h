@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include <sys/signal.h>
+#include <pthread.h>
 #include "net_bench.h"
 #include "net_delay.h"
 #include "sync_protocol.h"
@@ -54,6 +56,13 @@ class SyncPipeStruct {
     inline std::set<std::string> pipeSet() { return m_pipe_set; }
 
     inline const std::set<std::string>& pipeSet() const { return m_pipe_set; }
+
+    inline void clear() { 
+        for (auto& pipe_file_name: this->m_pipe_set) { 
+            remove(pipe_file_name.c_str());
+        }
+        this->m_pipe_set.clear();
+    }
 };
 
 /**
@@ -479,28 +488,16 @@ class SyncStruct {
    public:
     /**
      * @brief Construct synchronize stucture.
-     *
-     * Initializete mutex.
      */
-    SyncStruct() {
-        if (pthread_mutex_init(&m_mutex, NULL) < 0) {
-            perror("pthread_mutex_init");
-            exit(EXIT_FAILURE);
-        }
-    }
+    SyncStruct() = default;
 
     /**
      * @brief Destory synchronize structure.
-     *
-     * Destory mutex.
      */
-    ~SyncStruct() { pthread_mutex_destroy(&m_mutex); }
+    ~SyncStruct() = default;
 
    public:
-    /**
-     * @brief Mutex to access this structure.
-     */
-    pthread_mutex_t m_mutex;
+
 
     /**
      * @brief Benchmark list, recording the communication transactions have sent out.
@@ -537,10 +534,12 @@ class SyncStruct {
      * @brief Communication behavior.
      */
     SyncCommStruct m_comm_struct;
+    
     /**
      * @brief Barrier timing behavior.
      */
     SyncBarrierStruct m_barrier_timing_struct;
+    
     /**
      * @brief Lock behavior.
      */
@@ -555,68 +554,67 @@ class SyncStruct {
  * @brief Functions to handle commands.
  * @{ 
  */
-/**
- * @brief Handle CYCLE command.
- * @param __cmd Command to handle.
- * @param __sync_struct Pointer to global synchronize structure.
- */
-void handle_cycle_cmd(const InterChiplet::SyncCommand& __cmd, SyncStruct* __sync_struct);
+// /**
+//  * @brief Handle CYCLE command.
+//  * @param __cmd Command to handle.
+//  * @param __sync_struct Pointer to global synchronize structure.
+//  */
+// void handle_cycle_cmd(const InterChiplet::SyncCommand& __cmd, SyncStruct* __sync_struct);
 
-/**
- * @brief Handle PIPE command.
- * @param __cmd Command to handle.
- * @param __sync_struct Pointer to global synchronize structure.
- */
-void handle_pipe_cmd(const InterChiplet::SyncCommand& __cmd, SyncStruct* __sync_struct);
+// /**
+//  * @brief Handle PIPE command.
+//  * @param __cmd Command to handle.
+//  * @param __sync_struct Pointer to global synchronize structure.
+//  */
+// void handle_pipe_cmd(const InterChiplet::SyncCommand& __cmd, SyncStruct* __sync_struct, ProcessStruct *__proc);
 
-/**
- * @brief Handle BARRIER command.
- * @param __cmd Command to handle.
- * @param __sync_struct Pointer to global synchronize structure.
- */
-void handle_barrier_cmd(const InterChiplet::SyncCommand& __cmd, SyncStruct* __sync_struct);
+// /**
+//  * @brief Handle BARRIER command.
+//  * @param __cmd Command to handle.
+//  * @param __sync_struct Pointer to global synchronize structure.
+//  */
+// void handle_barrier_cmd(const InterChiplet::SyncCommand& __cmd, SyncStruct* __sync_struct);
 
-/**
- * @brief Handle LOCK command.
- * @param __cmd Command to handle.
- * @param __sync_struct Pointer to global synchronize structure.
- */
-void handle_lock_cmd(const InterChiplet::SyncCommand& __cmd, SyncStruct* __sync_struct);
+// /**
+//  * @brief Handle LOCK command.
+//  * @param __cmd Command to handle.
+//  * @param __sync_struct Pointer to global synchronize structure.
+//  */
+// void handle_lock_cmd(const InterChiplet::SyncCommand& __cmd, SyncStruct* __sync_struct);
 
-/**
- * @brief Handle UNLOCK command.
- * @param __cmd Command to handle.
- * @param __sync_struct Pointer to global synchronize structure.
- */
-void handle_unlock_cmd(const InterChiplet::SyncCommand& __cmd, SyncStruct* __sync_struct);
+// /**
+//  * @brief Handle UNLOCK command.
+//  * @param __cmd Command to handle.
+//  * @param __sync_struct Pointer to global synchronize structure.
+//  */
+// void handle_unlock_cmd(const InterChiplet::SyncCommand& __cmd, SyncStruct* __sync_struct);
 
-/**
- * @brief Handle LAUNCH command.
- * @param __cmd Command to handle.
- * @param __sync_struct Pointer to global synchronize structure.
- */
-void handle_launch_cmd(const InterChiplet::SyncCommand& __cmd, SyncStruct* __sync_struct);
+// /**
+//  * @brief Handle LAUNCH command.
+//  * @param __cmd Command to handle.
+//  * @param __sync_struct Pointer to global synchronize structure.
+//  */
+// void handle_launch_cmd(const InterChiplet::SyncCommand& __cmd, SyncStruct* __sync_struct);
 
-/**
- * @brief Handle WAITLAUNCH command.
- * @param __cmd Command to handle.
- * @param __sync_struct Pointer to global synchronize structure.
- */
-void handle_waitlaunch_cmd(const InterChiplet::SyncCommand& __cmd, SyncStruct* __sync_struct);
+// /**
+//  * @brief Handle WAITLAUNCH command.
+//  * @param __cmd Command to handle.
+//  * @param __sync_struct Pointer to global synchronize structure.
+//  */
+// void handle_waitlaunch_cmd(const InterChiplet::SyncCommand& __cmd, SyncStruct* __sync_struct);
 
-/**
- * @brief Handle READ command.
- * @param __cmd Command to handle.
- * @param __sync_struct Pointer to global synchronize structure.
- */
-void handle_read_cmd(const InterChiplet::SyncCommand& __cmd, SyncStruct* __sync_struct);
+// /**
+//  * @brief Handle READ command.
+//  * @param __cmd Command to handle.
+//  * @param __sync_struct Pointer to global synchronize structure.
+//  */
+// void handle_read_cmd(const InterChiplet::SyncCommand& __cmd, SyncStruct* __sync_struct, ProcessStruct *__proc_struct = nullptr);
 
-/**
- * @brief Handle WRITE command.
- * @param __cmd Command to handle.
- * @param __sync_struct Pointer to global synchronize structure.
- */
-void handle_write_cmd(const InterChiplet::SyncCommand& __cmd, SyncStruct* __sync_struct);
-/**
- * @}
- */
+// /**
+//  * @brief Handle WRITE command.
+//  * @param __cmd Command to handle.
+//  * @param __sync_struct Pointer to global synchronize structure.
+//  */
+// void handle_write_cmd(const InterChiplet::SyncCommand& __cmd, SyncStruct* __sync_struct, ProcessStruct *__proc_struct = nullptr);
+
+

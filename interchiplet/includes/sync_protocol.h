@@ -209,12 +209,15 @@ inline std::string dumpCmd(const SyncCommand& __cmd) {
     return ss.str();
 }
 
+// Edit by SYC ～(∠·ω< )⌒★
 /**
  * @brief Send CYCLE command.
  * @param __cycle Cycle to send CYCLE command.
+ * @param __src_x Source address in X-axis.
+ * @param __src_y Source address in Y-axis.
  */
-inline void sendCycleCmd(TimeType __cycle) {
-    std::cout << NSINTERCHIPLET_CMD_HEAD << " CYCLE " << __cycle << std::endl;
+inline void sendCycleCmd(TimeType __cycle, int __src_x, int __src_y) {
+    std::cout << NSINTERCHIPLET_CMD_HEAD << " CYCLE " << __src_x << " " << __src_y << " " << __cycle << std::endl;
 }
 
 /**
@@ -433,14 +436,17 @@ inline void sendResultCmd(int __fd, const std::vector<long>& __res_list) {
     };
 }
 
+// Edit by SYC ～(∠·ω< )⌒★
 /**
  * @brief Send CYCLE command and wait for SYNC command.
  * @param __cycle Cycle to send CYCLE command.
+ * @param __src_x Source address in X-axis.
+ * @param __src_y Source address in Y-axis.
  * @return Cycle to receive SYNC command.
  */
-inline TimeType cycleSync(TimeType __cycle) {
+inline TimeType cycleSync(TimeType __cycle, int __src_x = -1, int __src_y = -1) {
     // Send CYCLE command.
-    sendCycleCmd(__cycle);
+    sendCycleCmd(__cycle, __src_x, __src_y);
     // Read message from stdin.
     SyncCommand resp_cmd = parseCmd();
     // Only handle SYNC message, return cycle to receive SYNC command.

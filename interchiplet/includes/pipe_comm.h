@@ -29,10 +29,12 @@ namespace InterChiplet {
 class PipeCommUnit {
    public:
     PipeCommUnit(const char *file_name, bool read) {
+        // std::cout << "Create new fifo start." << std::endl;
         m_file_name = std::string(file_name);
         m_file_id = open(file_name, read ? O_RDONLY : O_WRONLY);
         if (m_file_id == -1) {
             std::cerr << "Cannot open pipe file " << m_file_name << "." << std::endl;
+            // std::cout << "Create new fifo failed." << std::endl;
             exit(1);
         } else {
             std::cout << "Open pipe file " << m_file_name << "." << std::endl;
@@ -43,6 +45,7 @@ class PipeCommUnit {
         }
         m_size = 0;
         m_read_ptr = 0;
+        // std::cout << "Create new fifo fin." << std::endl;
 
 #ifdef PIPE_COMMON_DEBUG
         std::string debug_file_name = m_file_name + ".hex";
@@ -80,6 +83,7 @@ class PipeCommUnit {
     }
 
     int write_data(void *src_buf, int nbyte) {
+        std::cout << "Enter data writing, about " << nbyte << " bytes." << std::endl;
         uint8_t *uint8_buf = (uint8_t *)src_buf;
         int src_ptr = 0;
         while (src_ptr < nbyte) {
@@ -190,12 +194,15 @@ class PipeComm {
         std::string file_name_str = std::string(file_name);
         std::map<std::string, PipeCommUnit *>::iterator it = m_named_fifo_map.find(file_name_str);
         if (it == m_named_fifo_map.end()) {
-            PipeCommUnit *recv_unit = new PipeCommUnit(file_name, false);
+            std::cout << "Create new fifo" << file_name_str << std::endl;
+            PipeCommUnit *recv_unit = new InterChiplet::PipeCommUnit(file_name_str.c_str(), false);
+            std::cout << "Create new fin" << std::endl;
             m_named_fifo_map[file_name_str] = recv_unit;
-            it = m_named_fifo_map.find(file_name_str);
+            return recv_unit->write_data(buf, nbyte);
         }
-
-        return it->second->write_data(buf, nbyte);
+        else {
+            return it->second->write_data(buf, nbyte);
+        }
     }
 
    private:

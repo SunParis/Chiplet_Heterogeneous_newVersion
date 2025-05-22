@@ -32,8 +32,7 @@ add_library(interchiplet_c STATIC
 #     srcs/apis_cu.cu)
 
 # Executable: interchiplet
-add_executable(interchiplet srcs/interchiplet.cpp
-                            srcs/cmd_handler.cpp)
+add_executable(interchiplet srcs/interchiplet.cpp srcs/global_manager.cpp)
 target_include_directories(interchiplet PUBLIC thirdparty/CLI11/include)
 target_include_directories(interchiplet PUBLIC thirdparty/spdlog/include)
 target_compile_options(interchiplet PUBLIC "-pthread")

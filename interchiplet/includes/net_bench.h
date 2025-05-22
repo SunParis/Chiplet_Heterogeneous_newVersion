@@ -53,6 +53,15 @@ class NetworkBenchItem {
      */
     NetworkBenchItem() {}
 
+    NetworkBenchItem(const NetworkBenchItem& obj)
+    :   m_src_cycle(obj.m_src_cycle),
+        m_dst_cycle(obj.m_dst_cycle),
+        m_src(obj.m_src),
+        m_dst(obj.m_dst),
+        m_desc(obj.m_desc),
+        m_pac_size(obj.m_pac_size)
+    {}
+
     /**
      * @brief Construct NetworkBenchItem from SyncCommand.
      * @param __src_cmd Structure of source command.
@@ -87,6 +96,14 @@ class NetworkBenchItem {
         // One head flit is required any way.
         m_pac_size = __src_cmd.m_nbytes / PAC_PAYLOAD_BYTE +
                      ((__src_cmd.m_nbytes % PAC_PAYLOAD_BYTE) > 0 ? 1 : 0) + 1;
+    }
+
+    NetworkBenchItem(InterChiplet::InnerTimeType __cycle, const InterChiplet::AddrType& __src,
+                     const InterChiplet::AddrType& __dst, long __desc, int __pac_size)
+    : m_src_cycle(__cycle), m_dst_cycle(__cycle), m_src(__src), m_dst(__dst), m_desc(__desc), m_pac_size(__pac_size)
+    {
+        m_pac_size = __pac_size / PAC_PAYLOAD_BYTE +
+                     ((__pac_size % PAC_PAYLOAD_BYTE) > 0 ? 1 : 0) + 1;
     }
 
     /**
@@ -158,6 +175,13 @@ class NetworkBenchList : public std::multimap<InterChiplet::InnerTimeType, Netwo
         bench_of.close();
     }
 };
+
+struct CompareNetworkBenchItem {
+    bool operator()(const NetworkBenchItem& __item1, const NetworkBenchItem& __item2) {
+        return __item1.m_src_cycle < __item2.m_src_cycle;
+    }
+};
+
 /**
  * @}
  */
