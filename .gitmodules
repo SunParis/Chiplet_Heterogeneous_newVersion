@@ -16,3 +16,6 @@
 [submodule "gem5"]
 	path = gem5
 	url = https://github.com/gem5/gem5.git
+[submodule "popnet_chiplet"]
+	path = popnet_chiplet
+	url = https://github.com/SunParis/popnet_chiplet_v2.git

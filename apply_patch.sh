@@ -18,3 +18,7 @@ git apply ../interchiplet/patch/gpgpu-sim.diff
 # Patch for GEM5
 cd ${SIMULATOR_ROOT}/gem5
 git apply ../interchiplet/patch/gem5.diff
+
+# Patch for Popnet
+cd ${SIMULATOR_ROOT}/popnet_chiplet
+git apply ../interchiplet/patch/popnet_chiplet.diff

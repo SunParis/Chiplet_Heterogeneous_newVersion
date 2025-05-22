@@ -1,0 +1,13 @@
+diff --git a/includes/global.h b/includes/global.h
+index 0dd9119..e9ff3b3 100644
+--- a/includes/global.h
++++ b/includes/global.h
+@@ -3,6 +3,8 @@
+ # ifndef _GLOBAL_H_
+ # define _GLOBAL_H_ 1
+ 
++# define INTERCHIPLET
++
+ # include "global_defines/defines.h"
+ # include "global_defines/packet_defines.h"
+ # include "global_defines/RGen.h"
