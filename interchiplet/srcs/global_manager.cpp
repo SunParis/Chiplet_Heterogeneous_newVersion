@@ -5,44 +5,77 @@ const InterChiplet::InnerTimeType TimeMax = std::numeric_limits<InterChiplet::In
 
 using namespace InterChiplet;
 
+/**
+ * @brief Insert a PIPE(SEND) command into the send pipe list.
+ * @param __cmd The command to insert.
+ * @param proc Pointer to the process structure.
+ */
 void GlobalManager::insert_send_pipe(const InterChiplet::SyncCommand& __cmd, ProcessStruct *proc) {
-    const std::lock_guard<std::mutex> lock(this->m_pipe_list_lock);
-    if (this->m_recv_pipe_list[__cmd.m_src].size() != 0) {
-        for (auto iter = this->m_recv_pipe_list[__cmd.m_src].begin();
-            iter != this->m_recv_pipe_list[__cmd.m_src].end(); iter++
-        ) {
-            if ((*iter) == __cmd.m_dst) {
-                this->m_recv_pipe_list[__cmd.m_src].erase(iter);
-                return;
+    {
+        const std::lock_guard<std::mutex> lock(this->m_pipe_list_lock);
+        // Check if the corresponding PIPE(RECV) command exists in the recv pipe list.
+        if (this->m_recv_pipe_list[__cmd.m_src].size() != 0) {
+            for (auto iter = this->m_recv_pipe_list[__cmd.m_src].begin();
+                iter != this->m_recv_pipe_list[__cmd.m_src].end(); iter++
+            ) {
+                if ((*iter) == __cmd.m_dst) {
+                    // If the PIPE(RECV) command exists, 
+                    // remove it from the recv pipe list and return.
+                    this->m_recv_pipe_list[__cmd.m_src].erase(iter);
+                    return;
+                }
             }
         }
+        // If the PIPE(RECV) command does not exist, add the PIPE(SEND) command to the send pipe list.
+        this->m_send_pipe_list[__cmd.m_src].push_back(__cmd.m_dst);
     }
-    this->m_send_pipe_list[__cmd.m_src].push_back(__cmd.m_dst);
+
+    // PIPE(SEND) need not do this operation.
+    // this->update_status(proc, PS_SUSPEND, false, true);
 }
 
+/**
+ * @brief Insert a PIPE(RECV) command into the receive pipe list.
+ * @param __cmd The command to insert.
+ * @param proc Pointer to the process structure.
+ */
 void GlobalManager::insert_recv_pipe(const InterChiplet::SyncCommand& __cmd, ProcessStruct *proc) {
     {
         const std::lock_guard<std::mutex> lock(this->m_pipe_list_lock);
+        // Check if the corresponding PIPE(SEND) command exists in the send pipe list.
         if (this->m_send_pipe_list[__cmd.m_src].size() != 0) {
             for (auto iter = this->m_send_pipe_list[__cmd.m_src].begin();
                 iter != this->m_send_pipe_list[__cmd.m_src].end(); iter++
             ) {
                 if ((*iter) == __cmd.m_dst) {
+                    // If the PIPE(SEND) command exists,
+                    // remove it from the send pipe list and return.
                     this->m_send_pipe_list[__cmd.m_src].erase(iter);
                     return;
                 }
             }
         }
+        // If the PIPE(SEND) command does not exist, add the PIPE(RECV) command to the receive pipe list.
         this->m_recv_pipe_list[__cmd.m_src].push_back(__cmd.m_dst);
     }
+
+    // PIPE(RECV) will block the process until the corresponding PIPE(SEND) command is received.
     this->update_status(proc, PS_SUSPEND, true);
 }
 
+
+/**
+ * @brief Get delay information for a given send and receive address.
+ * @param send_addr The address of the sender.
+ * @param recv_addr The address of the receiver.
+ * @return A pair containing a boolean indicating success and the delay item.
+ */
 std::pair<bool, NetworkDelayItem>
 GlobalManager::get_delay_info(
     const InterChiplet::AddrType& send_addr, 
     const InterChiplet::AddrType& recv_addr
 ) {
+    // Check if the delay information for the given send address exists.
     for (auto iter = this->popnet_delay[send_addr].begin();
         iter != this->popnet_delay[send_addr].end(); iter++
     ) {
@@ -56,64 +89,97 @@ GlobalManager::get_delay_info(
     return std::make_pair(false, NetworkDelayItem());
 }
 
+/**
+ * @brief Let the Popnet process continue.
+ * @details This function checks if the Popnet process can continue.
+ * @note This function is called when the clock level is updated.
+ */
 void GlobalManager::popnet_succ() {
     const std::lock_guard<std::mutex> lock(this->m_popnet_op_lock);
+    // If there is no packege in the network, pause the Popnet process.
     if (this->popnet_process->m_pac_in_net == 0) {
         this->popnet_process->pause();
         return;
     }
+
+    // Check if the Popnet process has reached the maximum time.
     InterChiplet::InnerTimeType tmp1 = this->popnet_process->m_max_time;
     InterChiplet::InnerTimeType tmp2 = this->popnet_process->m_current_time;
-    spdlog::debug("Popnet clk is now {}({}).", tmp2, tmp1);
+    spdlog::debug("Popnet clk is now {}(max:: {}).", tmp2, tmp1);
     if (this->popnet_process->m_max_time <= this->popnet_process->m_current_time) {
         this->popnet_process->pause();
     }
     this->popnet_process->restart(); 
 }
 
+/**
+ * @brief Kill all processes.
+ * @details This function kills all processes in the process list.
+ * @note This function is called when the simulation failed.
+ */
 void GlobalManager::kill_all_proc() {
     for (auto& iter: this->proc_list) {
+        // Check if the process is not already terminated.
         if (iter->m_state != PS_END) {
             iter->m_state = PS_END;
+            // Send SIGKILL signal to the process.
             kill(iter->m_pid, SIGKILL);
             spdlog::error("Process {} was forcibly terminated.", iter->m_pid);
         }
     }
 }
 
+/**
+ * @brief Check if there is any new delayinfo.
+ * @note This function is called when the clock of popnet is updated.
+ */
 void GlobalManager::check_new_delayinfo() {
     std::vector<NetworkDelayItem> res;
     const std::lock_guard<std::mutex> lock(this->m_delay_list_lock);
     const std::lock_guard<std::mutex> commun_lock(this->m_commun_list_lock);
+    // Check if there is any new delay information.
     if (this->popnet_process->get_new_delay(res)) {
         spdlog::debug("Read {} delay info.", res.size());
+        // Process each delay item.
         for (auto& delay_item: res) {
-            if (delay_item.m_delay_list[1] == -1) {                
+            // If the second delay info is `-1`,
+            // it means the delay info only contains the "send delay". 
+            if (delay_item.m_delay_list[1] == -1) {
+                // Send synchronize command to response WRITE command.           
                 InterChiplet::SyncCommand& cmd = this->m_send_cmd_list[delay_item.m_src].front().first;
                 InterChiplet::sendSyncCmd(cmd.m_stdin_fd, static_cast<InterChiplet::TimeType>(
                     (delay_item.m_delay_list[0] + delay_item.m_cycle) * cmd.m_clock_rate));
+                // Update the process time and status.
                 this->update_proc_time(this->m_send_cmd_list[delay_item.m_src].front().second,
                     delay_item.m_delay_list[0] + delay_item.m_cycle, false);
                 this->update_status(this->m_send_cmd_list[delay_item.m_src].front().second,
                     PS_RUNNING, false, false, false);
                 this->m_send_cmd_list[delay_item.m_src].erase(this->m_send_cmd_list[delay_item.m_src].begin());
             }
+            // If the second delay info is not `-1`,
+            // it means the delay info contains "trans delay".
             else {
                 for (auto iter = this->m_recv_cmd_list[delay_item.m_src].begin();
                     iter != this->m_recv_cmd_list[delay_item.m_src].end(); iter++
                 ) {
+                    // Find whether the corresponding READ(RECV) command exists in the recv command list.
                     if (delay_item.m_src == (*iter).first.m_src && delay_item.m_dst == (*iter).first.m_dst) {
+                        // If the corresponding READ(RECV) command exists,
+                        // count the delay time and send synchronize command.
                         delay_item.m_delay_list[1] += delay_item.m_cycle;
                         if (delay_item.m_delay_list[1] < (*iter).first.m_cycle) {
                             delay_item.m_delay_list[1] = (*iter).first.m_cycle;
                         }
                         InterChiplet::sendSyncCmd((*iter).first.m_stdin_fd, static_cast<InterChiplet::TimeType>(
                             delay_item.m_delay_list[1] * (*iter).first.m_clock_rate));
+                        // Update the process time and status.
                         this->update_proc_time((*iter).second, delay_item.m_delay_list[1], false);
                         this->update_status((*iter).second, PS_RUNNING, false, false, false);
                         this->m_recv_cmd_list[delay_item.m_src].erase(iter);
                         break;
                     }
+                    // If the corresponding READ(RECV) command does not exist,
+                    // add the delay item to the popnet delay list without counting the delay time.
                     if (iter + 1 == this->m_recv_cmd_list[delay_item.m_src].end()) {
                         this->popnet_delay[delay_item.m_src].push_back(delay_item);
                     }
@@ -123,25 +189,41 @@ void GlobalManager::check_new_delayinfo() {
     }
 }
 
+/**
+ * @brief Insert a WRITE(SEND) command into the send command list.
+ * @param __cmd The command to insert.
+ * @param proc Pointer to the process structure.
+ */
 void GlobalManager::insert_send(const InterChiplet::SyncCommand& __cmd, ProcessStruct *proc) {
     spdlog::debug("Inert `SEND`:: {}", InterChiplet::dumpCmd(__cmd));
     {
         const std::lock_guard<std::mutex> lock(this->m_commun_list_lock);
+        // Insert the command into the send command list.
         this->m_send_cmd_list[__cmd.m_src].push_back(std::make_pair(__cmd, proc));
     }
     {
         const std::lock_guard<std::mutex> lock(this->m_bench_lock);
+        // Insert the command into the trace bench list.
         this->bench.push(NetworkBenchItem(__cmd.m_cycle, __cmd.m_src,
             __cmd.m_dst, __cmd.m_desc, __cmd.m_nbytes));
     }
+    // Update the clock level.
     this->update_min_time();
 }
 
+/**
+ * @brief Insert a READ(RECV) command into the receive command list.
+ * @param __cmd The command to insert.
+ * @param delay_item The delay item associated with the command.
+ * @param proc Pointer to the process structure.
+ */
 bool GlobalManager::insert_recv(const InterChiplet::SyncCommand& __cmd, NetworkDelayItem& delay_item, ProcessStruct *proc) {
     const std::lock_guard<std::mutex> lock(this->m_delay_list_lock);
     const std::lock_guard<std::mutex> commun_lock(this->m_commun_list_lock);
+    // Check if the corresponding delayinfo exists in the delay list.
     auto res = this->get_delay_info(__cmd.m_src, __cmd.m_dst);
     if (res.first) {
+        // If the delayinfo exists, count the delay time.
         delay_item = NetworkDelayItem(res.second);
         delay_item.m_delay_list[1] += delay_item.m_cycle;
         if (delay_item.m_delay_list[1] < __cmd.m_cycle) {
@@ -149,10 +231,19 @@ bool GlobalManager::insert_recv(const InterChiplet::SyncCommand& __cmd, NetworkD
         }
         return true;
     }
+    // If the delayinfo does not exist, insert the command into the receive command list.
     this->m_recv_cmd_list[__cmd.m_src].push_back(std::make_pair(__cmd, proc));
     return false;
 }
 
+/**
+ * @brief Update the process status.
+ * @param __proc_struct Pointer to the process structure.
+ * @param __proc_st New process state.
+ * @param due_to_recv_sync Flag indicating if the update is due to receive sync.
+ * @param due_to_send_sync Flag indicating if the update is due to send sync.
+ * @param need_popnet_move Flag indicating if Popnet should move.
+ */
 void GlobalManager::update_status(ProcessStruct *__proc_struct, ProcessState __proc_st, bool due_to_recv_sync, bool due_to_send_sync, bool need_popnet_move) {
     {
         const std::lock_guard<std::mutex> lock(this->m_process_op_lock);
@@ -167,6 +258,12 @@ void GlobalManager::update_status(ProcessStruct *__proc_struct, ProcessState __p
     }
 }
 
+/**
+ * @brief Update the process time and status.
+ * @param __proc_struct Pointer to the process structure.
+ * @param _m_current_time Current time.
+ * @param need_popnet_move Flag indicating if Popnet should move.
+ */
 void GlobalManager::update_proc_time(ProcessStruct* __proc_struct, InterChiplet::InnerTimeType _m_current_time, bool need_popnet_move) {
     {
         const std::lock_guard<std::mutex> lock(this->m_process_op_lock);
@@ -179,31 +276,54 @@ void GlobalManager::update_proc_time(ProcessStruct* __proc_struct, InterChiplet:
     }
 }
 
+/**
+ * @brief Update the Popnet time.
+ * @param _m_current_time Current time.
+ */
 void GlobalManager::update_popnet_time(InterChiplet::InnerTimeType _m_current_time) {
     if (_m_current_time == this->popnet_process->m_current_time) {
         return;
     }
+    
+    // Check if there is any new delay information.
     this->check_new_delayinfo();
+    
+    // Update the minimum time.
     this->update_min_time();
+
     const std::lock_guard<std::mutex> lock(this->m_popnet_op_lock);
+
+    // Update the current time of the Popnet process.
     this->popnet_process->m_current_time = _m_current_time;
+
+    // If the current time exceeds the maximum time, pause the Popnet process.
     if (this->popnet_process->m_max_time <= _m_current_time) {            
         this->popnet_process->pause();
     }
+    // If the current time is less than the maximum time, restart the Popnet process.
     else {
         this->popnet_process->restart();
     }
     spdlog::debug("Popnet process moves to {}.", _m_current_time);
 }
 
+/**
+ * @brief Count and return the minimum time (namely, clock level) from the process list.
+ * @note This function will add delay bench from GLobalManager::bench to the trace file
+ *          if the start time of the delay bench is less than the minimum time.
+ */
 InterChiplet::InnerTimeType GlobalManager::update_min_time() {
     InterChiplet::InnerTimeType ret = -1;
+    // Count the number of processes in the END state.
     std::size_t count = 0;
+    // Initialize the minimum index to the size of the process list.
     std::size_t min_idx;
     {
         const std::lock_guard<std::mutex> lock(this->m_process_op_lock);
         min_idx = this->proc_list.size();
+        // Iterate through the process list to find the minimum time.
         for (std::size_t i = 0; i < this->proc_list.size(); i++) {
+            // If the process is not in the END state, check its current time.
             if (this->proc_list[i]->m_state != PS_END) {
                 if (!this->proc_list[i]->m_pause_due_to_recv_sync) {
                     if (ret == -1) {
@@ -220,16 +340,25 @@ InterChiplet::InnerTimeType GlobalManager::update_min_time() {
                         min_idx = i;
                     }
                 }
+                // Ignore processes that are paused due to receive sync.
+                // else {
+                //     // Do nothing
+                // }
             }
+            // Ignore processes that are in the END state.
             else {
                 count++;
             }
         }
+
+        // If all processes are in the END state, write the end flag to the Popnet process.
         if (count == this->proc_list.size()) {
             this->popnet_process->write_end_flag();
             spdlog::debug("All process fin.");
             return -1;
         }
+        // If all of the running processes are paused due to recv sync,
+        //  and there is no package in the network, stop all process.
         else if (ret == -1
             && this->popnet_process->m_state != PS_RUNNING
             && this->popnet_process->m_pac_in_net == 0
@@ -242,6 +371,9 @@ InterChiplet::InnerTimeType GlobalManager::update_min_time() {
     }
 
     InterChiplet::InnerTimeType old_max = this->popnet_process->m_max_time;
+    
+    // If the the slowest process is paused due to WRITE(SEND), set the maximum time to TimeMax.
+    // This is to ensure that the simulation will not be paused due to WRITE(SEND).
     if (this->proc_list[min_idx]->m_pause_due_to_send_sync || ret == -1) {
         this->popnet_process->m_max_time = TimeMax;
     }
@@ -254,6 +386,9 @@ InterChiplet::InnerTimeType GlobalManager::update_min_time() {
     }
 
     const std::lock_guard<std::mutex> lock(this->m_bench_lock);
+
+    // To move the delay bench to the trace file,
+    // if the start time of the delay bench is less than the minimum time.
     while (!this->bench.empty()) {
         if (this->bench.top().m_src_cycle > ret) {
             break;
@@ -261,6 +396,7 @@ InterChiplet::InnerTimeType GlobalManager::update_min_time() {
         this->popnet_process->write_new_rec(this->bench.top());
         this->bench.pop();
     }
+
     return ret;
 }
 
@@ -276,12 +412,22 @@ GlobalManager::~GlobalManager() {
     delete this->sync_struct;
 }
 
+/**
+ * @brief Handle CYCLE command.
+ * @param __cmd Command to handle.
+ * @param __proc_struct Pointer to process structure.
+ */
 void GlobalManager::handle_cycle_cmd(const InterChiplet::SyncCommand& __cmd, ProcessStruct *__proc_struct) {
     // Update global cycle.
     this->sync_struct->m_cycle_struct.update(__cmd.m_cycle);
     spdlog::debug("{}", dumpCmd(__cmd));
 }
 
+/**
+ * @brief Handle PIPE command.
+ * @param __cmd Command to handle.
+ * @param __proc_struct Pointer to process structure.
+ */
 void GlobalManager::handle_pipe_cmd(const InterChiplet::SyncCommand& __cmd, ProcessStruct *__proc_struct) {
     // Create Pipe file.
     std::string file_name = InterChiplet::pipeName(__cmd.m_src, __cmd.m_dst);
@@ -314,6 +460,11 @@ void GlobalManager::handle_pipe_cmd(const InterChiplet::SyncCommand& __cmd, Proc
     }
 }
 
+/**
+ * @brief Handle BARRIER command.
+ * @param __cmd Command to handle.
+ * @param __proc_struct Pointer to process structure.
+ */
 void GlobalManager::handle_barrier_cmd(const InterChiplet::SyncCommand& __cmd, ProcessStruct *__proc_struct) {
     int uid = DIM_X(__cmd.m_dst);
     int count = __cmd.m_nbytes;
@@ -335,6 +486,11 @@ void GlobalManager::handle_barrier_cmd(const InterChiplet::SyncCommand& __cmd, P
     }
 }
 
+/**
+ * @brief Handle LOCK command.
+ * @param __cmd Command to handle.
+ * @param __proc_struct Pointer to process structure.
+ */
 void GlobalManager::handle_lock_cmd(const InterChiplet::SyncCommand& __cmd, ProcessStruct *__proc_struct) {
     // Get mutex ID.
     int uid = DIM_X(__cmd.m_dst);
@@ -385,6 +541,11 @@ void GlobalManager::handle_lock_cmd(const InterChiplet::SyncCommand& __cmd, Proc
     }
 }
 
+/**
+ * @brief Handle UNLOCK command.
+ * @param __cmd Command to handle.
+ * @param __proc_struct Pointer to process structure.
+ */
 void GlobalManager::handle_unlock_cmd(const InterChiplet::SyncCommand& __cmd, ProcessStruct *__proc_struct) {
     // Get mutex ID.
     int uid = DIM_X(__cmd.m_dst);
@@ -436,6 +597,11 @@ void GlobalManager::handle_unlock_cmd(const InterChiplet::SyncCommand& __cmd, Pr
     }
 }
 
+/**
+ * @brief Handle LAUNCH command.
+ * @param __cmd Command to handle.
+ * @param __proc_struct Pointer to process structure.
+ */
 void GlobalManager::handle_launch_cmd(const InterChiplet::SyncCommand& __cmd, ProcessStruct *__proc_struct) {
     // Check launch order and remove item.
     if (this->sync_struct->m_delay_list.hasLaunch(__cmd.m_dst)) {
@@ -470,6 +636,11 @@ void GlobalManager::handle_launch_cmd(const InterChiplet::SyncCommand& __cmd, Pr
     }
 }
 
+/**
+ * @brief Handle WAITLAUNCH command.
+ * @param __cmd Command to handle.
+ * @param __proc_struct Pointer to process structure.
+ */
 void GlobalManager::handle_waitlaunch_cmd(const InterChiplet::SyncCommand& __cmd, ProcessStruct *__proc_struct) {
     InterChiplet::SyncCommand cmd = __cmd;
 
@@ -499,6 +670,11 @@ void GlobalManager::handle_waitlaunch_cmd(const InterChiplet::SyncCommand& __cmd
     }
 }
 
+/**
+ * @brief Handle READ command.
+ * @param __cmd Command to handle.
+ * @param __proc_struct Pointer to process structure.
+ */
 void GlobalManager::handle_read_cmd(const InterChiplet::SyncCommand& __cmd, ProcessStruct *__proc_struct) {
     // Check for paired write command.
     NetworkDelayItem delay_item;
@@ -697,6 +873,11 @@ void GlobalManager::handle_unlock_write_cmd(const InterChiplet::SyncCommand& __c
     }
 }
 
+/**
+ * @brief Handle WRITE command.
+ * @param __cmd Command to handle.
+ * @param __proc_struct Pointer to process structure.
+ */
 void GlobalManager::handle_write_cmd(const InterChiplet::SyncCommand& __cmd, ProcessStruct *__proc_struct) {
     if (__cmd.m_desc & InterChiplet::SPD_BARRIER) {
         // Special handle WRITE cmmand after BARRIER. WRITE(BARRIER)

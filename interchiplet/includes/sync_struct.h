@@ -1,16 +1,28 @@
-#pragma
+# pragma once
 
-#include <list>
-#include <map>
-#include <set>
-#include <string>
-#include <vector>
+/**
+ * @file sync_struct.h
+ * @brief Data structure of synchronization.
+ * @details This file contains the data structure of synchronization.
+ * @note This file is named "cmd_handler.h" in the original code.
+ *       The name is changed to "sync_struct.h" because the command 
+ *          handler functions are moved to "global_manager.h".
+ */
 
-#include <sys/signal.h>
-#include <pthread.h>
-#include "net_bench.h"
-#include "net_delay.h"
-#include "sync_protocol.h"
+# ifndef _SYNC_STRUCT_H_
+# define _SYNC_STRUCT_H_ 1
+
+# include <list>
+# include <map>
+# include <set>
+# include <string>
+# include <vector>
+
+# include <sys/signal.h>
+# include <pthread.h>
+# include "net_bench.h"
+# include "net_delay.h"
+# include "sync_protocol.h"
 
 /**
  * @defgroup cmd_handler_struct
@@ -548,6 +560,8 @@ class SyncStruct {
 /**
  * @}
  */
+
+# endif  // _SYNC_STRUCT_H_
 
 /**
  * @defgroup cmd_handler_func
