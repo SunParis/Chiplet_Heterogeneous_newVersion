@@ -406,10 +406,65 @@ GlobalManager::GlobalManager(PopnetProcess *popnet_process_, std::vector<Process
     bench()
 {
     this->sync_struct = new SyncStruct();
+    // JULIET:
+    // O, swear not by the moon, th’ inconstant moon,
+    // That monthly changes in her circled orb,
+    // Lest that thy love prove likewise variable.
+
+    // ROMEO:
+    // What shall I swear by?
+
+    // JULIET:
+    // Do not swear at all;
+    // Or, if thou wilt, swear by thy gracious self,
+    // Which is the god of my idolatry,
+    // And I’ll believe thee.
+
+    // ROMEO:
+    // If my heart’s dear love—
+
+    // JULIET:
+    // Well, do not swear. Although I joy in thee,
+    // I have no joy of this contract tonight:
+    // It is too rash, too unadvised, too sudden;
+    // Too like the lightning, which doth cease to be
+    // Ere one can say “It lightens.” Sweet, good night!
+    // This bud of love, by summer’s ripening breath,
+    // May prove a beauteous flower when next we meet.
 }
 
 GlobalManager::~GlobalManager() {
     delete this->sync_struct;
+    // ROMEO:
+    // He jests at scars that never felt a wound.
+    // (Juliet appears above at a window.)
+    // But soft! What light through yonder window breaks?
+    // It is the east, and Juliet is the sun.
+    // Arise, fair sun, and kill the envious moon,
+    // Who is already sick and pale with grief
+    // That thou, her maid, art far more fair than she.
+    // Be not her maid, since she is envious.
+    // Her vestal livery is but sick and green,
+    // And none but fools do wear it. Cast it off.
+
+    // JULIET:
+    // Ay me!
+
+    // ROMEO:
+    // She speaks. O, speak again, bright angel! For thou art
+    // As glorious to this night, being o’er my head,
+    // As is a winged messenger of heaven
+    // Unto the white-upturned wondering eyes
+    // Of mortals that fall back to gaze on him
+    // When he bestrides the lazy-puffing clouds
+    // And sails upon the bosom of the air.
+
+    // JULIET:
+    // O Romeo, Romeo! Wherefore art thou Romeo?
+    // Deny thy father and refuse thy name,
+    // Or, if thou wilt not, be but sworn my love,
+    // And I’ll no longer be a Capulet.
+
 }
 
 /**
